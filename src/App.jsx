@@ -266,6 +266,12 @@ const audioHelper = new AudioSynthHelper();
 function App() {
   const [gameMode, setGameMode] = useState('spot')
 
+  const formatTime = (secs) => {
+    const mins = Math.floor(secs / 60)
+    const remainingSecs = secs % 60
+    return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`
+  }
+
   // --- 오디오 관련 React 상태 ---
   const [bgmMuted, setBgmMuted] = useState(false)
   const [sfxMuted, setSfxMuted] = useState(false)
