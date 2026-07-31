@@ -1,11 +1,12 @@
-@keyframes shake {
+/* 공통 애니메이션 및 패널 스타일 */
+@keyframes wrongShake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-6px) rotate(-1deg); }
-  75% { transform: translateX(6px) rotate(1deg); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
 }
 
-.animate-shake {
-  animation: shake 0.25s ease-in-out;
+.wrong-shake {
+  animation: wrongShake 0.25s ease-in-out;
 }
 
 @keyframes ping-glow {
@@ -37,49 +38,155 @@
   animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-/* Glassmorphism custom blur classes */
 .glass-panel {
   background: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* 색연필 커서 스타일 - 마우스 포인터 적용 (오른손잡이 기준 뾰족한 끝(0,0) 매핑) */
+/* 색연필 커서 스타일 - 뾰족한 끝(0,0)에 핫스팟 매핑 */
 .pencil-cursor-area {
   cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><path d='M0 0 L10 5 L5 10 Z' fill='%23ffd8a8'/><path d='M0 0 L5 2.5 L2.5 5 Z' fill='%23f43f5e'/><path d='M10 5 L28 23 L23 28 L5 10 Z' fill='%23fb7185'/><path d='M28 23 L32 27 L27 32 L23 28 Z' fill='%23fda4af'/></svg>") 0 0, pointer;
 }
 
-/* 일반 버튼/메뉴 등에서는 기본 포인터 유지 */
+/* 버튼, 메뉴, 슬라이더 등은 기본 포인터 사용 */
 .pencil-cursor-area button,
 .pencil-cursor-area select,
 .pencil-cursor-area input,
-.pencil-cursor-area a {
+.pencil-cursor-area a,
+.pencil-cursor-area [role="button"] {
   cursor: pointer;
 }
 
-/* 색연필 스케치풍 정답 원형 마커 그리기 애니메이션 */
-@keyframes draw-circle {
+/* 10-1. 색연필 정답 표시 효과 (원을 따라 그려지는 애니메이션) */
+@keyframes drawCirclePath {
+  from {
+    stroke-dashoffset: 283;
+  }
   to {
     stroke-dashoffset: 0;
   }
 }
 
-.sketch-circle {
-  stroke-dasharray: 500;
-  stroke-dashoffset: 500;
-  animation: draw-circle 0.6s ease-out forwards;
+@keyframes fadeInInner {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-/* 색연필 ✕ 표시 페이드아웃 애니메이션 */
-@keyframes draw-x {
-  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
-  50% { transform: scale(1.1) rotate(5deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 0; }
+.pencil-circle-container {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
-.sketch-x {
-  display: inline-block;
-  animation: draw-x 0.8s ease-in-out forwards;
-  color: #f43f5e;
-  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+/* 연필로 덧칠한 것 같은 비정형적인 흔들리는 원 궤적 */
+.sketch-line-1 {
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg); /* 12시 방향 시작 */
+  animation: drawCirclePath 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.sketch-line-2 {
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  transform-origin: 50% 50%;
+  transform: rotate(-80deg); /* 살짝 비껴난 각도에서 시작 */
+  animation: drawCirclePath 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.05s forwards; /* 약간 딜레이 */
+}
+
+/* 색연필 빗금 내부 칠하기 자국 */
+.pencil-shading {
+  transform-origin: 50% 50%;
+  animation: fadeInInner 0.4s ease-out forwards;
+}
+
+/* 10-2. 색연필 오답 X 표시 */
+.pencil-x {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: fadeOutX 0.2s ease-out 0.8s forwards;
+}
+
+@keyframes fadeOutX {
+  to {
+    opacity: 0;
+  }
+}
+
+.pencil-x::before,
+.pencil-x::after {
+  content: "";
+  position: absolute;
+  top: 24px;
+  left: 2px;
+  width: 50px;
+  height: 6px;
+  border-radius: 40%;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(220, 45, 45, 0.95) 0,
+      rgba(220, 45, 45, 0.95) 2px,
+      rgba(180, 20, 20, 0.75) 3px,
+      rgba(220, 45, 45, 0.9) 5px
+    );
+  transform-origin: center;
+}
+
+.pencil-x::before {
+  transform: rotate(45deg) scaleX(0);
+  animation: drawFirstLine 0.25s forwards;
+}
+
+.pencil-x::after {
+  transform: rotate(-45deg) scaleX(0);
+  animation: drawSecondLine 0.25s 0.2s forwards;
+}
+
+@keyframes drawFirstLine {
+  to {
+    transform: rotate(45deg) scaleX(1);
+  }
+}
+
+@keyframes drawSecondLine {
+  to {
+    transform: rotate(-45deg) scaleX(1);
+  }
+}
+
+/* 힌트 깜빡임 오버레이용 스케치 서클 */
+.hint-sketch-circle {
+  animation: hintBlink 0.5s infinite alternate ease-in-out;
+}
+
+@keyframes hintBlink {
+  0% { opacity: 0.3; transform: scale(0.9) rotate(-3deg); }
+  100% { opacity: 1; transform: scale(1.1) rotate(3deg); }
+}
+
+/* 정답 시 반짝임 스파클 효과 */
+@keyframes sparkle-anim {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+.sparkle-effect {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border: 2px dotted #22d3ee;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: sparkle-anim 0.5s ease-out forwards;
 }

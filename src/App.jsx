@@ -157,7 +157,6 @@ class AudioSynthHelper {
     }
   }
 
-  // SFX: 정답 맞췄을 때 (맑은 실로폰 2중 화음)
   playCorrect() {
     this.init();
     if (!this.ctx || this.isSfxMuted) return;
@@ -182,7 +181,6 @@ class AudioSynthHelper {
     playTone(1318.51, 0.08);
   }
 
-  // SFX: 오답 클릭 시 (부드러운 톡 소리)
   playWrong() {
     this.init();
     if (!this.ctx || this.isSfxMuted) return;
@@ -210,7 +208,6 @@ class AudioSynthHelper {
     osc.stop(now + 0.12);
   }
 
-  // SFX: 힌트 사용 시 (반짝이는 아르페지오 소리)
   playHint() {
     this.init();
     if (!this.ctx || this.isSfxMuted) return;
@@ -237,7 +234,6 @@ class AudioSynthHelper {
     playSparkle(1567.98, 0.15);
   }
 
-  // SFX: 모든 정답을 찾았을 때 (경쾌한 축하 아르페지오 팬파레)
   playVictory() {
     this.init();
     if (!this.ctx || this.isSfxMuted) return;
@@ -288,20 +284,17 @@ function App() {
 
   // --- Spot the Difference States ---
   const [spotDiffs, setSpotDiffs] = useState([])
-  const [spotDifficulty, setSpotDifficulty] = useState('normal') // easy (3) | normal (5) | hard (7)
-  const [timeLimit, setTimeLimit] = useState(60) // 30 | 60 | 90
+  const [spotDifficulty, setSpotDifficulty] = useState('normal')
+  const [timeLimit, setTimeLimit] = useState(60)
   const [spotTimeLeft, setSpotTimeLeft] = useState(60)
   const [spotWrongClicksCount, setSpotWrongClicksCount] = useState(0)
   
-  // 원본/수정 이미지 개별 오답 X 표시 좌표 저장
   const [wrongMarksOriginal, setWrongMarksOriginal] = useState([])
   const [wrongMarksModified, setWrongMarksModified] = useState([])
 
-  // 원본/수정 개별 흔들림 효과
   const [shakeOriginal, setShakeOriginal] = useState(false)
   const [shakeModified, setShakeModified] = useState(false)
 
-  // 정답 시 작은 반짝임 이펙트 좌표 저장
   const [sparklesList, setSparklesList] = useState([])
 
   const [spotActive, setSpotActive] = useState(false)
@@ -316,7 +309,6 @@ function App() {
   const slidingTimerRef = useRef(null)
   const spotTimerRef = useRef(null)
 
-  // --- 오디오 제어 동기화 ---
   useEffect(() => {
     audioHelper.setBgmVolume(bgmVol);
   }, [bgmVol])
@@ -333,7 +325,6 @@ function App() {
     audioHelper.setSfxMute(sfxMuted);
   }, [sfxMuted])
 
-  // BGM 정리
   useEffect(() => {
     return () => {
       audioHelper.stopBgm();
@@ -439,7 +430,6 @@ function App() {
 
   // --- Spot the Difference Logic ---
   const initSpotGame = useCallback(() => {
-    // 총 7개 정의 (5개는 실제 다르고, 2개는 아주 미세/숨겨진 요소 지정)
     const baseDiffs = [
       { id: 1, name: '분홍색 꽃', x: 12.5, y: 49, radius: 9.5, found: false },
       { id: 2, name: '머리띠 파란 나뭇잎', x: 55, y: 16, radius: 6, found: false },
@@ -452,7 +442,6 @@ function App() {
 
     let activeDiffs = []
     if (spotDifficulty === 'easy') {
-      // 쉬움: 무작위 3개 선별
       const indices = []
       while (indices.length < 3) {
         const r = Math.floor(Math.random() * 7)
@@ -460,7 +449,6 @@ function App() {
       }
       activeDiffs = baseDiffs.filter((_, idx) => indices.includes(idx))
     } else if (spotDifficulty === 'normal') {
-      // 보통: 무작위 5개 선별
       const indices = []
       while (indices.length < 5) {
         const r = Math.floor(Math.random() * 7)
@@ -468,7 +456,6 @@ function App() {
       }
       activeDiffs = baseDiffs.filter((_, idx) => indices.includes(idx))
     } else {
-      // 어려움: 7개 전부 매칭
       activeDiffs = baseDiffs
     }
 
@@ -517,11 +504,9 @@ function App() {
     return () => clearInterval(spotTimerRef.current)
   }, [spotActive, spotWon, spotLost, gameMode])
 
-  // 오답 한국어 음성 출력 (SpeechSynthesis API 활용)
   const speakWrongMessage = () => {
     if (sfxMuted || !('speechSynthesis' in window)) return;
     
-    // 연속 클릭 대응을 위한 기존 발화 중지
     window.speechSynthesis.cancel();
     
     const messages = [
@@ -529,19 +514,17 @@ function App() {
       "아쉬워요! 다른 곳을 살펴보세요.",
       "여기는 아니에요. 다시 도전해 보세요."
     ];
-    // 무작위 메세지 피드백
     const randomMsg = messages[Math.floor(Math.random() * messages.length)];
     const utterance = new SpeechSynthesisUtterance(randomMsg);
     
     utterance.lang = "ko-KR";
     utterance.rate = 1.0;
-    utterance.pitch = 1.15; // 아동용 밝은 톤
+    utterance.pitch = 1.15;
     utterance.volume = sfxVol * 0.75;
     
     window.speechSynthesis.speak(utterance);
   }
 
-  // 원본/수정본 이미지 내 클릭 핸들러
   const handleSpotImageClick = (e, imageType) => {
     if (spotWon || spotLost) return
     
@@ -560,7 +543,6 @@ function App() {
       if (dist <= diff.radius && !diff.found) {
         foundAny = true
         
-        // 반짝임 이펙트 파티클 추가
         const sparkleId = Date.now()
         setSparklesList(prev => [...prev, { id: sparkleId, x: diff.x, y: diff.y }])
         setTimeout(() => {
@@ -574,19 +556,17 @@ function App() {
 
     if (foundAny) {
       setSpotDiffs(updatedDiffs)
-      audioHelper.playCorrect() // 맑은 실로폰 소리
+      audioHelper.playCorrect()
 
       const allFound = updatedDiffs.every((diff) => diff.found)
       if (allFound) {
         setSpotWon(true)
         setSpotActive(false)
-        audioHelper.playVictory() // 승리곡
+        audioHelper.playVictory()
       }
     } else {
-      // 오답 처리
       setSpotWrongClicksCount((prev) => prev + 1)
       
-      // 개별 컨테이너 흔들림 부여
       if (imageType === 'original') {
         setShakeOriginal(true)
         setTimeout(() => setShakeOriginal(false), 250)
@@ -607,8 +587,8 @@ function App() {
         }, 1000)
       }
 
-      audioHelper.playWrong() // 효과음
-      speakWrongMessage()    // 아동 교육용 TTS 음성 출력
+      audioHelper.playWrong()
+      speakWrongMessage()
     }
   }
 
@@ -880,31 +860,80 @@ function App() {
                       return (
                         <div
                           key={`orig-circle-${diff.id}`}
-                          className="pencil-circle"
+                          className="pencil-circle-container"
                           style={{
                             left: `${diff.x}%`,
                             top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
+                            width: `${diff.radius * 2.3}%`,
+                            height: `${diff.radius * 2.3}%`
                           }}
-                        />
+                        >
+                          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.08)"
+                              strokeWidth="35"
+                              className="pencil-shading"
+                            />
+                            <path
+                              d="M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.85)"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                              className="sketch-line-1"
+                              style={{
+                                filter: 'drop-shadow(1px 1px 0 rgba(20, 184, 166, 0.4))'
+                              }}
+                            />
+                            <path
+                              d="M 48 8 A 43 43 0 1 0 52 92 A 43 43 0 1 0 48 8"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.65)"
+                              strokeWidth="3.5"
+                              strokeLinecap="round"
+                              className="sketch-line-2"
+                              style={{
+                                filter: 'drop-shadow(-1px 1px 0 rgba(20, 184, 166, 0.3))'
+                              }}
+                            />
+                          </svg>
+                        </div>
                       )
                     }
                     if (hintHighlight === idx) {
                       return (
                         <div
                           key={`orig-hint-${diff.id}`}
-                          className="pencil-circle hint-sketch-circle"
+                          className="pencil-circle-container hint-sketch-circle"
                           style={{
                             left: `${diff.x}%`,
                             top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)',
-                            borderColor: '#14b8a6'
+                            width: `${diff.radius * 2.3}%`,
+                            height: `${diff.radius * 2.3}%`
                           }}
-                        />
+                        >
+                          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.05)"
+                              strokeWidth="35"
+                            />
+                            <path
+                              d="M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6"
+                              fill="none"
+                              stroke="#14b8a6"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </div>
                       )
                     }
                     return null
@@ -957,31 +986,80 @@ function App() {
                       return (
                         <div
                           key={`mod-circle-${diff.id}`}
-                          className="pencil-circle"
+                          className="pencil-circle-container"
                           style={{
                             left: `${diff.x}%`,
                             top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
+                            width: `${diff.radius * 2.3}%`,
+                            height: `${diff.radius * 2.3}%`
                           }}
-                        />
+                        >
+                          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.08)"
+                              strokeWidth="35"
+                              className="pencil-shading"
+                            />
+                            <path
+                              d="M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.85)"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                              className="sketch-line-1"
+                              style={{
+                                filter: 'drop-shadow(1px 1px 0 rgba(20, 184, 166, 0.4))'
+                              }}
+                            />
+                            <path
+                              d="M 48 8 A 43 43 0 1 0 52 92 A 43 43 0 1 0 48 8"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.65)"
+                              strokeWidth="3.5"
+                              strokeLinecap="round"
+                              className="sketch-line-2"
+                              style={{
+                                filter: 'drop-shadow(-1px 1px 0 rgba(20, 184, 166, 0.3))'
+                              }}
+                            />
+                          </svg>
+                        </div>
                       )
                     }
                     if (hintHighlight === idx) {
                       return (
                         <div
                           key={`mod-hint-${diff.id}`}
-                          className="pencil-circle hint-sketch-circle"
+                          className="pencil-circle-container hint-sketch-circle"
                           style={{
                             left: `${diff.x}%`,
                             top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)',
-                            borderColor: '#14b8a6'
+                            width: `${diff.radius * 2.3}%`,
+                            height: `${diff.radius * 2.3}%`
                           }}
-                        />
+                        >
+                          <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="40"
+                              fill="none"
+                              stroke="rgba(20, 184, 166, 0.05)"
+                              strokeWidth="35"
+                            />
+                            <path
+                              d="M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6"
+                              fill="none"
+                              stroke="#14b8a6"
+                              strokeWidth="4"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </div>
                       )
                     }
                     return null
@@ -1071,7 +1149,6 @@ function App() {
                       onClick={() => {
                         setSpotWon(false);
                         setSpotLost(false);
-                        // Reset & choose difficulty
                       }}
                       className="py-2.5 px-1 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition-all text-xs"
                     >
