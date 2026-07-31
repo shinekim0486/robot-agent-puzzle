@@ -110,36 +110,32 @@ class AudioSynthHelper {
     this.isPlayingBgm = true;
     this.currentStep = 0;
 
-    // 밝고 부드러운 어린이 연주곡 (C - G - Am - F) 코드 멜로디 구성
     const melody = [
-      523.25, 659.25, 783.99, 659.25, // C5, E5, G5, E5 (C major)
-      392.00, 493.88, 587.33, 493.88, // G4, B4, D5, B4 (G major)
-      440.00, 523.25, 659.25, 523.25, // A4, C5, E5, C5 (A minor)
-      349.23, 440.00, 523.25, 440.00  // F4, A4, C5, A4 (F major)
+      523.25, 659.25, 783.99, 659.25, // C5, E5, G5, E5
+      392.00, 493.88, 587.33, 493.88, // G4, B4, D5, B4
+      440.00, 523.25, 659.25, 523.25, // A4, C5, E5, C5
+      349.23, 440.00, 523.25, 440.00  // F4, A4, C5, A4
     ];
 
     const bass = [
-      261.63, 261.63, // C3
-      196.00, 196.00, // G2
-      220.00, 220.00, // A2
-      174.61, 174.61  // F2
+      261.63, 261.63,
+      196.00, 196.00,
+      220.00, 220.00,
+      174.61, 174.61
     ];
 
-    const stepTime = 0.45; // beat duration (약 133 BPM)
+    const stepTime = 0.45;
     
     const scheduler = () => {
       if (!this.isPlayingBgm || !this.ctx) return;
       const now = this.ctx.currentTime;
       
-      // 8단계 미리 스케줄링
       for (let i = 0; i < 8; i++) {
         const step = (this.currentStep + i) % 16;
         const noteTime = now + i * stepTime;
         
-        // 멜로디음 (삼각파로 부드러운 실로폰/마림바 톤 재현)
         this.playNote(melody[step], noteTime, 0.4, 'triangle', 0.15);
         
-        // 베이스 반주 (사인파로 부드럽게 받쳐줌)
         if (step % 2 === 0) {
           const bassStep = Math.floor(step / 2);
           this.playNote(bass[bassStep], noteTime, 0.8, 'sine', 0.25);
@@ -182,8 +178,8 @@ class AudioSynthHelper {
       osc.stop(now + delay + 0.4);
     };
     
-    playTone(1046.50, 0);    // C6
-    playTone(1318.51, 0.08); // E6
+    playTone(1046.50, 0);
+    playTone(1318.51, 0.08);
   }
 
   // SFX: 오답 클릭 시 (부드러운 톡 소리)
@@ -269,7 +265,6 @@ class AudioSynthHelper {
   }
 }
 
-// 싱글톤 패턴 오디오 헬퍼 선언
 const audioHelper = new AudioSynthHelper();
 
 function App() {
@@ -292,24 +287,28 @@ function App() {
   const [showSlidingHint, setShowSlidingHint] = useState(false)
 
   // --- Spot the Difference States ---
-  const [spotDiffs, setSpotDiffs] = useState([
-    { id: 1, name: '분홍색 꽃', x: 12.5, y: 49, radius: 9.5, found: false },
-    { id: 2, name: '머리띠 파란 나뭇잎', x: 55, y: 16, radius: 6, found: false },
-    { id: 3, name: '초록색 개구리', x: 95.5, y: 43.5, radius: 6.5, found: false },
-    { id: 4, name: '보라색 선글라스', x: 54, y: 76.5, radius: 18, found: false },
-    { id: 5, name: '노란색 별 장난감', x: 38, y: 72, radius: 8, found: false }
-  ])
-  const [spotDifficulty, setSpotDifficulty] = useState('normal') // easy | normal | hard
+  const [spotDiffs, setSpotDiffs] = useState([])
+  const [spotDifficulty, setSpotDifficulty] = useState('normal') // easy (3) | normal (5) | hard (7)
   const [timeLimit, setTimeLimit] = useState(60) // 30 | 60 | 90
   const [spotTimeLeft, setSpotTimeLeft] = useState(60)
   const [spotWrongClicksCount, setSpotWrongClicksCount] = useState(0)
-  const [spotWrongMarks, setSpotWrongMarks] = useState([])
+  
+  // 원본/수정 이미지 개별 오답 X 표시 좌표 저장
+  const [wrongMarksOriginal, setWrongMarksOriginal] = useState([])
+  const [wrongMarksModified, setWrongMarksModified] = useState([])
+
+  // 원본/수정 개별 흔들림 효과
+  const [shakeOriginal, setShakeOriginal] = useState(false)
+  const [shakeModified, setShakeModified] = useState(false)
+
+  // 정답 시 작은 반짝임 이펙트 좌표 저장
+  const [sparklesList, setSparklesList] = useState([])
+
   const [spotActive, setSpotActive] = useState(false)
   const [spotWon, setSpotWon] = useState(false)
   const [spotLost, setSpotLost] = useState(false)
   const [hintsLeft, setHintsLeft] = useState(3)
   const [hintHighlight, setHintHighlight] = useState(null)
-  const [shakeBoard, setShakeBoard] = useState(false)
   const [showAnswer, setShowAnswer] = useState(false)
   const [spotSecondsElapsed, setSpotSecondsElapsed] = useState(0)
 
@@ -334,7 +333,7 @@ function App() {
     audioHelper.setSfxMute(sfxMuted);
   }, [sfxMuted])
 
-  // Clean up BGM on unmount
+  // BGM 정리
   useEffect(() => {
     return () => {
       audioHelper.stopBgm();
@@ -440,37 +439,52 @@ function App() {
 
   // --- Spot the Difference Logic ---
   const initSpotGame = useCallback(() => {
+    // 총 7개 정의 (5개는 실제 다르고, 2개는 아주 미세/숨겨진 요소 지정)
     const baseDiffs = [
       { id: 1, name: '분홍색 꽃', x: 12.5, y: 49, radius: 9.5, found: false },
       { id: 2, name: '머리띠 파란 나뭇잎', x: 55, y: 16, radius: 6, found: false },
       { id: 3, name: '초록색 개구리', x: 95.5, y: 43.5, radius: 6.5, found: false },
       { id: 4, name: '보라색 선글라스', x: 54, y: 76.5, radius: 18, found: false },
-      { id: 5, name: '노란색 별 장난감', x: 38, y: 72, radius: 8, found: false }
+      { id: 5, name: '노란색 별 장난감', x: 38, y: 72, radius: 8, found: false },
+      { id: 6, name: '물 위의 미니 노란 오리', x: 15.5, y: 20, radius: 6, found: false },
+      { id: 7, name: '머리띠 사과 갈색 줄기', x: 46.5, y: 15, radius: 5, found: false }
     ]
 
-    // Difficulty filter
+    let activeDiffs = []
     if (spotDifficulty === 'easy') {
-      const indicesToKeep = []
-      while (indicesToKeep.length < 3) {
-        const randIdx = Math.floor(Math.random() * 5)
-        if (!indicesToKeep.includes(randIdx)) {
-          indicesToKeep.push(randIdx)
-        }
+      // 쉬움: 무작위 3개 선별
+      const indices = []
+      while (indices.length < 3) {
+        const r = Math.floor(Math.random() * 7)
+        if (!indices.includes(r)) indices.push(r)
       }
-      setSpotDiffs(baseDiffs.filter((_, idx) => indicesToKeep.includes(idx)))
+      activeDiffs = baseDiffs.filter((_, idx) => indices.includes(idx))
+    } else if (spotDifficulty === 'normal') {
+      // 보통: 무작위 5개 선별
+      const indices = []
+      while (indices.length < 5) {
+        const r = Math.floor(Math.random() * 7)
+        if (!indices.includes(r)) indices.push(r)
+      }
+      activeDiffs = baseDiffs.filter((_, idx) => indices.includes(idx))
     } else {
-      setSpotDiffs(baseDiffs)
+      // 어려움: 7개 전부 매칭
+      activeDiffs = baseDiffs
     }
 
+    setSpotDiffs(activeDiffs)
     setSpotTimeLeft(timeLimit)
     setSpotWrongClicksCount(0)
-    setSpotWrongMarks([])
+    setWrongMarksOriginal([])
+    setWrongMarksModified([])
+    setSparklesList([])
     setSpotActive(false)
     setSpotWon(false)
     setSpotLost(false)
     setHintsLeft(3)
     setHintHighlight(null)
-    setShakeBoard(false)
+    setShakeOriginal(false)
+    setShakeModified(false)
     setShowAnswer(false)
     setSpotSecondsElapsed(0)
     audioHelper.stopBgm()
@@ -503,12 +517,37 @@ function App() {
     return () => clearInterval(spotTimerRef.current)
   }, [spotActive, spotWon, spotLost, gameMode])
 
-  const handleSpotImageClick = (e) => {
+  // 오답 한국어 음성 출력 (SpeechSynthesis API 활용)
+  const speakWrongMessage = () => {
+    if (sfxMuted || !('speechSynthesis' in window)) return;
+    
+    // 연속 클릭 대응을 위한 기존 발화 중지
+    window.speechSynthesis.cancel();
+    
+    const messages = [
+      "틀렸어요! 다시 찾아보세요.",
+      "아쉬워요! 다른 곳을 살펴보세요.",
+      "여기는 아니에요. 다시 도전해 보세요."
+    ];
+    // 무작위 메세지 피드백
+    const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+    const utterance = new SpeechSynthesisUtterance(randomMsg);
+    
+    utterance.lang = "ko-KR";
+    utterance.rate = 1.0;
+    utterance.pitch = 1.15; // 아동용 밝은 톤
+    utterance.volume = sfxVol * 0.75;
+    
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // 원본/수정본 이미지 내 클릭 핸들러
+  const handleSpotImageClick = (e, imageType) => {
     if (spotWon || spotLost) return
     
     if (!spotActive) {
       setSpotActive(true)
-      audioHelper.startBgm() // 시작 시 BGM 구동
+      audioHelper.startBgm()
     }
 
     const rect = e.currentTarget.getBoundingClientRect()
@@ -520,6 +559,14 @@ function App() {
       const dist = Math.sqrt(Math.pow(clickX - diff.x, 2) + Math.pow(clickY - diff.y, 2))
       if (dist <= diff.radius && !diff.found) {
         foundAny = true
+        
+        // 반짝임 이펙트 파티클 추가
+        const sparkleId = Date.now()
+        setSparklesList(prev => [...prev, { id: sparkleId, x: diff.x, y: diff.y }])
+        setTimeout(() => {
+          setSparklesList(prev => prev.filter(s => s.id !== sparkleId))
+        }, 500)
+
         return { ...diff, found: true }
       }
       return diff
@@ -527,25 +574,41 @@ function App() {
 
     if (foundAny) {
       setSpotDiffs(updatedDiffs)
-      audioHelper.playCorrect() // 정답 효과음
+      audioHelper.playCorrect() // 맑은 실로폰 소리
 
       const allFound = updatedDiffs.every((diff) => diff.found)
       if (allFound) {
         setSpotWon(true)
         setSpotActive(false)
-        audioHelper.playVictory() // 승리 팬파레
+        audioHelper.playVictory() // 승리곡
       }
     } else {
+      // 오답 처리
       setSpotWrongClicksCount((prev) => prev + 1)
-      setShakeBoard(true)
-      setTimeout(() => setShakeBoard(false), 250)
-      audioHelper.playWrong() // 오답 효과음
+      
+      // 개별 컨테이너 흔들림 부여
+      if (imageType === 'original') {
+        setShakeOriginal(true)
+        setTimeout(() => setShakeOriginal(false), 250)
+        
+        const newMark = { id: Date.now(), x: clickX, y: clickY }
+        setWrongMarksOriginal((prev) => [...prev, newMark])
+        setTimeout(() => {
+          setWrongMarksOriginal((prev) => prev.filter((m) => m.id !== newMark.id))
+        }, 1000)
+      } else {
+        setShakeModified(true)
+        setTimeout(() => setShakeModified(false), 250)
+        
+        const newMark = { id: Date.now(), x: clickX, y: clickY }
+        setWrongMarksModified((prev) => [...prev, newMark])
+        setTimeout(() => {
+          setWrongMarksModified((prev) => prev.filter((m) => m.id !== newMark.id))
+        }, 1000)
+      }
 
-      const newMark = { id: Date.now(), x: clickX, y: clickY }
-      setSpotWrongMarks((prev) => [...prev, newMark])
-      setTimeout(() => {
-        setSpotWrongMarks((prev) => prev.filter((m) => m.id !== newMark.id))
-      }, 1000)
+      audioHelper.playWrong() // 효과음
+      speakWrongMessage()    // 아동 교육용 TTS 음성 출력
     }
   }
 
@@ -560,7 +623,7 @@ function App() {
     if (unfoundIdx !== -1) {
       setHintsLeft((prev) => prev - 1)
       setHintHighlight(unfoundIdx)
-      audioHelper.playHint() // 힌트 효과음
+      audioHelper.playHint()
       setTimeout(() => {
         setHintHighlight(null)
       }, 2000)
@@ -568,7 +631,9 @@ function App() {
   }
 
   const getRequiredDiffsCount = () => {
-    return spotDifficulty === 'easy' ? 3 : 5
+    if (spotDifficulty === 'easy') return 3
+    if (spotDifficulty === 'normal') return 5
+    return 7
   }
 
   const getFoundDiffsCount = () => {
@@ -636,7 +701,7 @@ function App() {
                       {[
                         { key: 'easy', label: '쉬움 (3개)' },
                         { key: 'normal', label: '보통 (5개)' },
-                        { key: 'hard', label: '어려움 (5개)' }
+                        { key: 'hard', label: '어려움 (7개)' }
                       ].map((item) => (
                         <button
                           key={item.key}
@@ -769,7 +834,6 @@ function App() {
                 </div>
 
                 <div className="flex gap-2">
-                  {/* Start Music Notice */}
                   {!spotActive && (
                     <div className="text-[10px] text-teal-400/80 mr-2 flex items-center animate-pulse">
                       ◀ 첫 클릭 시 연주곡 BGM이 시작됩니다!
@@ -793,7 +857,7 @@ function App() {
             </div>
 
             {/* Pictures Play Board Area with custom pencil cursor */}
-            <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 justify-center ${shakeBoard ? 'animate-shake' : ''}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-center">
               
               {/* Original Picture Column */}
               <div className="space-y-2">
@@ -801,8 +865,8 @@ function App() {
                   원본 그림
                 </div>
                 <div 
-                  onClick={handleSpotImageClick}
-                  className="relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area"
+                  onClick={(e) => handleSpotImageClick(e, 'original')}
+                  className={`relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area ${shakeOriginal ? 'wrong-shake' : ''}`}
                 >
                   <img 
                     src={originalImg} 
@@ -810,63 +874,64 @@ function App() {
                     className="w-full h-full object-cover select-none pointer-events-none"
                   />
                   
-                  {/* SVG Hand-drawn Sketch Circle Overlay */}
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    {spotDiffs.map((diff, idx) => {
-                      if (diff.found || showAnswer) {
-                        return (
-                          <circle
-                            key={`orig-circle-${diff.id}`}
-                            cx={`${diff.x}%`}
-                            cy={`${diff.y}%`}
-                            r={`${diff.radius * 1.1}%`}
-                            fill="none"
-                            stroke="#06b6d4"
-                            strokeWidth="3.5"
-                            strokeLinecap="round"
-                            className="sketch-circle"
-                            style={{
-                              transformOrigin: `${diff.x}% ${diff.y}%`,
-                              filter: 'drop-shadow(0 0 3px rgba(6,182,212,0.4))'
-                            }}
-                          />
-                        )
-                      }
-                      if (hintHighlight === idx) {
-                        return (
-                          <circle
-                            key={`orig-hint-${diff.id}`}
-                            cx={`${diff.x}%`}
-                            cy={`${diff.y}%`}
-                            r={`${diff.radius * 1.1}%`}
-                            fill="none"
-                            stroke="#14b8a6"
-                            strokeWidth="3.5"
-                            className="animate-pulse"
-                            style={{
-                              transformOrigin: `${diff.x}% ${diff.y}%`,
-                              filter: 'drop-shadow(0 0 6px #14b8a6)'
-                            }}
-                          />
-                        )
-                      }
-                      return null
-                    })}
-                  </svg>
+                  {/* Pencil Sketch Correct Circle Overlays */}
+                  {spotDiffs.map((diff, idx) => {
+                    if (diff.found || showAnswer) {
+                      return (
+                        <div
+                          key={`orig-circle-${diff.id}`}
+                          className="pencil-circle"
+                          style={{
+                            left: `${diff.x}%`,
+                            top: `${diff.y}%`,
+                            width: `${diff.radius * 2.2}%`,
+                            height: `${diff.radius * 2.2}%`,
+                            transform: 'translate(-50%, -50%)'
+                          }}
+                        />
+                      )
+                    }
+                    if (hintHighlight === idx) {
+                      return (
+                        <div
+                          key={`orig-hint-${diff.id}`}
+                          className="pencil-circle hint-sketch-circle"
+                          style={{
+                            left: `${diff.x}%`,
+                            top: `${diff.y}%`,
+                            width: `${diff.radius * 2.2}%`,
+                            height: `${diff.radius * 2.2}%`,
+                            transform: 'translate(-50%, -50%)',
+                            borderColor: '#14b8a6'
+                          }}
+                        />
+                      )
+                    }
+                    return null
+                  })}
+
+                  {/* Sparkle particles on correct spot */}
+                  {sparklesList.map((sparkle) => (
+                    <div 
+                      key={`orig-sparkle-${sparkle.id}`}
+                      className="sparkle-effect"
+                      style={{
+                        left: `${sparkle.x}%`,
+                        top: `${sparkle.y}%`,
+                      }}
+                    />
+                  ))}
 
                   {/* Red Sketch X marks for wrong clicks */}
-                  {spotWrongMarks.map((mark) => (
+                  {wrongMarksOriginal.map((mark) => (
                     <div
                       key={`orig-wrong-${mark.id}`}
-                      className="absolute sketch-x font-bold text-4xl pointer-events-none select-none"
+                      className="pencil-x"
                       style={{
                         left: `${mark.x}%`,
-                        top: `${mark.y}%`,
-                        transform: 'translate(-50%, -50%)'
+                        top: `${mark.y}%`
                       }}
-                    >
-                      ✕
-                    </div>
+                    />
                   ))}
                 </div>
               </div>
@@ -877,8 +942,8 @@ function App() {
                   틀린 그림
                 </div>
                 <div 
-                  onClick={handleSpotImageClick}
-                  className="relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area"
+                  onClick={(e) => handleSpotImageClick(e, 'modified')}
+                  className={`relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area ${shakeModified ? 'wrong-shake' : ''}`}
                 >
                   <img 
                     src={modifiedImg} 
@@ -886,63 +951,64 @@ function App() {
                     className="w-full h-full object-cover select-none pointer-events-none"
                   />
 
-                  {/* SVG Hand-drawn Sketch Circle Overlay */}
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    {spotDiffs.map((diff, idx) => {
-                      if (diff.found || showAnswer) {
-                        return (
-                          <circle
-                            key={`mod-circle-${diff.id}`}
-                            cx={`${diff.x}%`}
-                            cy={`${diff.y}%`}
-                            r={`${diff.radius * 1.1}%`}
-                            fill="none"
-                            stroke="#06b6d4"
-                            strokeWidth="3.5"
-                            strokeLinecap="round"
-                            className="sketch-circle"
-                            style={{
-                              transformOrigin: `${diff.x}% ${diff.y}%`,
-                              filter: 'drop-shadow(0 0 3px rgba(6,182,212,0.4))'
-                            }}
-                          />
-                        )
-                      }
-                      if (hintHighlight === idx) {
-                        return (
-                          <circle
-                            key={`mod-hint-${diff.id}`}
-                            cx={`${diff.x}%`}
-                            cy={`${diff.y}%`}
-                            r={`${diff.radius * 1.1}%`}
-                            fill="none"
-                            stroke="#14b8a6"
-                            strokeWidth="3.5"
-                            className="animate-pulse"
-                            style={{
-                              transformOrigin: `${diff.x}% ${diff.y}%`,
-                              filter: 'drop-shadow(0 0 6px #14b8a6)'
-                            }}
-                          />
-                        )
-                      }
-                      return null
-                    })}
-                  </svg>
+                  {/* Pencil Sketch Correct Circle Overlays */}
+                  {spotDiffs.map((diff, idx) => {
+                    if (diff.found || showAnswer) {
+                      return (
+                        <div
+                          key={`mod-circle-${diff.id}`}
+                          className="pencil-circle"
+                          style={{
+                            left: `${diff.x}%`,
+                            top: `${diff.y}%`,
+                            width: `${diff.radius * 2.2}%`,
+                            height: `${diff.radius * 2.2}%`,
+                            transform: 'translate(-50%, -50%)'
+                          }}
+                        />
+                      )
+                    }
+                    if (hintHighlight === idx) {
+                      return (
+                        <div
+                          key={`mod-hint-${diff.id}`}
+                          className="pencil-circle hint-sketch-circle"
+                          style={{
+                            left: `${diff.x}%`,
+                            top: `${diff.y}%`,
+                            width: `${diff.radius * 2.2}%`,
+                            height: `${diff.radius * 2.2}%`,
+                            transform: 'translate(-50%, -50%)',
+                            borderColor: '#14b8a6'
+                          }}
+                        />
+                      )
+                    }
+                    return null
+                  })}
+
+                  {/* Sparkle particles on correct spot */}
+                  {sparklesList.map((sparkle) => (
+                    <div 
+                      key={`mod-sparkle-${sparkle.id}`}
+                      className="sparkle-effect"
+                      style={{
+                        left: `${sparkle.x}%`,
+                        top: `${sparkle.y}%`,
+                      }}
+                    />
+                  ))}
 
                   {/* Red Sketch X marks for wrong clicks */}
-                  {spotWrongMarks.map((mark) => (
+                  {wrongMarksModified.map((mark) => (
                     <div
                       key={`mod-wrong-${mark.id}`}
-                      className="absolute sketch-x font-bold text-4xl pointer-events-none select-none"
+                      className="pencil-x"
                       style={{
                         left: `${mark.x}%`,
-                        top: `${mark.y}%`,
-                        transform: 'translate(-50%, -50%)'
+                        top: `${mark.y}%`
                       }}
-                    >
-                      ✕
-                    </div>
+                    />
                   ))}
                 </div>
               </div>
@@ -1005,7 +1071,7 @@ function App() {
                       onClick={() => {
                         setSpotWon(false);
                         setSpotLost(false);
-                        // Open game menu / change difficulty
+                        // Reset & choose difficulty
                       }}
                       className="py-2.5 px-1 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition-all text-xs"
                     >
