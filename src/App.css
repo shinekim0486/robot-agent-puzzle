@@ -43,3 +43,43 @@
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* 색연필 커서 스타일 - 마우스 포인터 적용 (오른손잡이 기준 뾰족한 끝(0,0) 매핑) */
+.pencil-cursor-area {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><path d='M0 0 L10 5 L5 10 Z' fill='%23ffd8a8'/><path d='M0 0 L5 2.5 L2.5 5 Z' fill='%23f43f5e'/><path d='M10 5 L28 23 L23 28 L5 10 Z' fill='%23fb7185'/><path d='M28 23 L32 27 L27 32 L23 28 Z' fill='%23fda4af'/></svg>") 0 0, pointer;
+}
+
+/* 일반 버튼/메뉴 등에서는 기본 포인터 유지 */
+.pencil-cursor-area button,
+.pencil-cursor-area select,
+.pencil-cursor-area input,
+.pencil-cursor-area a {
+  cursor: pointer;
+}
+
+/* 색연필 스케치풍 정답 원형 마커 그리기 애니메이션 */
+@keyframes draw-circle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sketch-circle {
+  stroke-dasharray: 500;
+  stroke-dashoffset: 500;
+  animation: draw-circle 0.6s ease-out forwards;
+}
+
+/* 색연필 ✕ 표시 페이드아웃 애니메이션 */
+@keyframes draw-x {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  50% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 0; }
+}
+
+.sketch-x {
+  display: inline-block;
+  animation: draw-x 0.8s ease-in-out forwards;
+  color: #f43f5e;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+}

@@ -14,16 +14,272 @@ import {
   Compass,
   AlertTriangle,
   HelpCircle,
-  Award
+  Award,
+  Volume2,
+  VolumeX,
+  Music,
+  Play
 } from 'lucide-react'
 import robotImg from './assets/robot.jpg'
 import originalImg from './assets/original.jpg'
 import modifiedImg from './assets/modified.jpg'
 import './App.css'
 
+// ================= Web Audio API 오디오 합성 클래스 =================
+class AudioSynthHelper {
+  constructor() {
+    this.ctx = null;
+    this.bgmTimeout = null;
+    this.isPlayingBgm = false;
+    this.bgmVolume = 0.25;
+    this.sfxVolume = 0.5;
+    this.bgmGainNode = null;
+    this.sfxGainNode = null;
+    this.currentStep = 0;
+    this.isBgmMuted = false;
+    this.isSfxMuted = false;
+  }
+
+  init() {
+    if (this.ctx) return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContextClass();
+      
+      this.bgmGainNode = this.ctx.createGain();
+      this.bgmGainNode.gain.setValueAtTime(this.isBgmMuted ? 0 : this.bgmVolume, this.ctx.currentTime);
+      this.bgmGainNode.connect(this.ctx.destination);
+
+      this.sfxGainNode = this.ctx.createGain();
+      this.sfxGainNode.gain.setValueAtTime(this.isSfxMuted ? 0 : this.sfxVolume, this.ctx.currentTime);
+      this.sfxGainNode.connect(this.ctx.destination);
+    } catch (e) {
+      console.error("Web Audio API not supported", e);
+    }
+  }
+
+  setBgmVolume(val) {
+    this.bgmVolume = val;
+    if (this.bgmGainNode && this.ctx) {
+      const targetGain = this.isBgmMuted ? 0 : val;
+      this.bgmGainNode.gain.setValueAtTime(targetGain, this.ctx.currentTime);
+    }
+  }
+
+  setSfxVolume(val) {
+    this.sfxVolume = val;
+    if (this.sfxGainNode && this.ctx) {
+      const targetGain = this.isSfxMuted ? 0 : val;
+      this.sfxGainNode.gain.setValueAtTime(targetGain, this.ctx.currentTime);
+    }
+  }
+
+  setBgmMute(mute) {
+    this.isBgmMuted = mute;
+    this.setBgmVolume(this.bgmVolume);
+  }
+
+  setSfxMute(mute) {
+    this.isSfxMuted = mute;
+    this.setSfxVolume(this.sfxVolume);
+  }
+
+  playNote(freq, time, duration, type = 'sine', gainVal = 0.25) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gainNode = this.ctx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+    
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(gainVal, time + 0.01);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration - 0.01);
+    
+    osc.connect(gainNode);
+    gainNode.connect(this.bgmGainNode);
+    
+    osc.start(time);
+    osc.stop(time + duration);
+  }
+
+  // 실로폰/마림바 아날로그 느낌의 BGM 스케줄러 루프
+  startBgm() {
+    this.init();
+    if (this.isPlayingBgm) return;
+    this.isPlayingBgm = true;
+    this.currentStep = 0;
+
+    // 밝고 부드러운 어린이 연주곡 (C - G - Am - F) 코드 멜로디 구성
+    const melody = [
+      523.25, 659.25, 783.99, 659.25, // C5, E5, G5, E5 (C major)
+      392.00, 493.88, 587.33, 493.88, // G4, B4, D5, B4 (G major)
+      440.00, 523.25, 659.25, 523.25, // A4, C5, E5, C5 (A minor)
+      349.23, 440.00, 523.25, 440.00  // F4, A4, C5, A4 (F major)
+    ];
+
+    const bass = [
+      261.63, 261.63, // C3
+      196.00, 196.00, // G2
+      220.00, 220.00, // A2
+      174.61, 174.61  // F2
+    ];
+
+    const stepTime = 0.45; // beat duration (약 133 BPM)
+    
+    const scheduler = () => {
+      if (!this.isPlayingBgm || !this.ctx) return;
+      const now = this.ctx.currentTime;
+      
+      // 8단계 미리 스케줄링
+      for (let i = 0; i < 8; i++) {
+        const step = (this.currentStep + i) % 16;
+        const noteTime = now + i * stepTime;
+        
+        // 멜로디음 (삼각파로 부드러운 실로폰/마림바 톤 재현)
+        this.playNote(melody[step], noteTime, 0.4, 'triangle', 0.15);
+        
+        // 베이스 반주 (사인파로 부드럽게 받쳐줌)
+        if (step % 2 === 0) {
+          const bassStep = Math.floor(step / 2);
+          this.playNote(bass[bassStep], noteTime, 0.8, 'sine', 0.25);
+        }
+      }
+      
+      this.currentStep = (this.currentStep + 8) % 16;
+      this.bgmTimeout = setTimeout(scheduler, 8 * stepTime * 1000 - 50);
+    };
+
+    scheduler();
+  }
+
+  stopBgm() {
+    this.isPlayingBgm = false;
+    if (this.bgmTimeout) {
+      clearTimeout(this.bgmTimeout);
+      this.bgmTimeout = null;
+    }
+  }
+
+  // SFX: 정답 맞췄을 때 (맑은 실로폰 2중 화음)
+  playCorrect() {
+    this.init();
+    if (!this.ctx || this.isSfxMuted) return;
+    const now = this.ctx.currentTime;
+    
+    const playTone = (freq, delay) => {
+      const osc = this.ctx.createOscillator();
+      const gainNode = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      
+      gainNode.gain.setValueAtTime(this.sfxVolume * 0.4, now + delay);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.4);
+      
+      osc.connect(gainNode);
+      gainNode.connect(this.sfxGainNode);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.4);
+    };
+    
+    playTone(1046.50, 0);    // C6
+    playTone(1318.51, 0.08); // E6
+  }
+
+  // SFX: 오답 클릭 시 (부드러운 톡 소리)
+  playWrong() {
+    this.init();
+    if (!this.ctx || this.isSfxMuted) return;
+    const now = this.ctx.currentTime;
+    
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gainNode = this.ctx.createGain();
+    
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(250, now);
+    
+    gainNode.gain.setValueAtTime(this.sfxVolume * 0.8, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    
+    osc.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(this.sfxGainNode);
+    
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
+
+  // SFX: 힌트 사용 시 (반짝이는 아르페지오 소리)
+  playHint() {
+    this.init();
+    if (!this.ctx || this.isSfxMuted) return;
+    const now = this.ctx.currentTime;
+    
+    const playSparkle = (freq, delay) => {
+      const osc = this.ctx.createOscillator();
+      const gainNode = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      
+      gainNode.gain.setValueAtTime(this.sfxVolume * 0.3, now + delay);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.25);
+      
+      osc.connect(gainNode);
+      gainNode.connect(this.sfxGainNode);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.25);
+    };
+    
+    playSparkle(880.00, 0);
+    playSparkle(1046.50, 0.05);
+    playSparkle(1318.51, 0.1);
+    playSparkle(1567.98, 0.15);
+  }
+
+  // SFX: 모든 정답을 찾았을 때 (경쾌한 축하 아르페지오 팬파레)
+  playVictory() {
+    this.init();
+    if (!this.ctx || this.isSfxMuted) return;
+    const now = this.ctx.currentTime;
+    
+    const playNoteVal = (freq, delay, dur) => {
+      const osc = this.ctx.createOscillator();
+      const gainNode = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + delay);
+      
+      gainNode.gain.setValueAtTime(this.sfxVolume * 0.4, now + delay);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
+      
+      osc.connect(gainNode);
+      gainNode.connect(this.sfxGainNode);
+      osc.start(now + delay);
+      osc.stop(now + delay + dur);
+    };
+
+    const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, idx) => {
+      playNoteVal(freq, idx * 0.08, 0.6);
+    });
+  }
+}
+
+// 싱글톤 패턴 오디오 헬퍼 선언
+const audioHelper = new AudioSynthHelper();
+
 function App() {
-  // Game Mode State ('sliding' | 'spot')
   const [gameMode, setGameMode] = useState('spot')
+
+  // --- 오디오 관련 React 상태 ---
+  const [bgmMuted, setBgmMuted] = useState(false)
+  const [sfxMuted, setSfxMuted] = useState(false)
+  const [bgmVol, setBgmVol] = useState(0.25)
+  const [sfxVol, setSfxVol] = useState(0.5)
 
   // --- Sliding Puzzle States ---
   const [gridSize, setGridSize] = useState(3)
@@ -43,23 +299,47 @@ function App() {
     { id: 4, name: '보라색 선글라스', x: 54, y: 76.5, radius: 18, found: false },
     { id: 5, name: '노란색 별 장난감', x: 38, y: 72, radius: 8, found: false }
   ])
-  const [spotDifficulty, setSpotDifficulty] = useState('normal') // 'easy' (3 diffs) | 'normal' (5 diffs) | 'hard' (5 diffs, less time)
-  const [timeLimit, setTimeLimit] = useState(60) // 30, 60, 90 seconds
+  const [spotDifficulty, setSpotDifficulty] = useState('normal') // easy | normal | hard
+  const [timeLimit, setTimeLimit] = useState(60) // 30 | 60 | 90
   const [spotTimeLeft, setSpotTimeLeft] = useState(60)
   const [spotWrongClicksCount, setSpotWrongClicksCount] = useState(0)
-  const [spotWrongMarks, setSpotWrongMarks] = useState([]) // array of { id, x, y }
+  const [spotWrongMarks, setSpotWrongMarks] = useState([])
   const [spotActive, setSpotActive] = useState(false)
   const [spotWon, setSpotWon] = useState(false)
   const [spotLost, setSpotLost] = useState(false)
   const [hintsLeft, setHintsLeft] = useState(3)
-  const [hintHighlight, setHintHighlight] = useState(null) // index of difference being hinted
+  const [hintHighlight, setHintHighlight] = useState(null)
   const [shakeBoard, setShakeBoard] = useState(false)
   const [showAnswer, setShowAnswer] = useState(false)
   const [spotSecondsElapsed, setSpotSecondsElapsed] = useState(0)
 
-  // Timer Refs
+  // Refs
   const slidingTimerRef = useRef(null)
   const spotTimerRef = useRef(null)
+
+  // --- 오디오 제어 동기화 ---
+  useEffect(() => {
+    audioHelper.setBgmVolume(bgmVol);
+  }, [bgmVol])
+
+  useEffect(() => {
+    audioHelper.setSfxVolume(sfxVol);
+  }, [sfxVol])
+
+  useEffect(() => {
+    audioHelper.setBgmMute(bgmMuted);
+  }, [bgmMuted])
+
+  useEffect(() => {
+    audioHelper.setSfxMute(sfxMuted);
+  }, [sfxMuted])
+
+  // Clean up BGM on unmount
+  useEffect(() => {
+    return () => {
+      audioHelper.stopBgm();
+    }
+  }, [])
 
   // --- Sliding Puzzle Logic ---
   const initSlidingPuzzle = useCallback((size = gridSize) => {
@@ -94,6 +374,7 @@ function App() {
   useEffect(() => {
     if (gameMode === 'sliding') {
       initSlidingPuzzle(gridSize)
+      audioHelper.stopBgm()
     }
   }, [gridSize, initSlidingPuzzle, gameMode])
 
@@ -130,12 +411,16 @@ function App() {
       newTiles[index] = totalTiles - 1
       setTiles(newTiles)
       setSlidingMoves((prev) => prev + 1)
+      audioHelper.playCorrect()
 
       const hasWon = newTiles.every((val, idx) => val === idx)
       if (hasWon) {
         setSlidingWon(true)
         setSlidingActive(false)
+        audioHelper.playVictory()
       }
+    } else {
+      audioHelper.playWrong()
     }
   }
 
@@ -155,7 +440,6 @@ function App() {
 
   // --- Spot the Difference Logic ---
   const initSpotGame = useCallback(() => {
-    // 5 diffs
     const baseDiffs = [
       { id: 1, name: '분홍색 꽃', x: 12.5, y: 49, radius: 9.5, found: false },
       { id: 2, name: '머리띠 파란 나뭇잎', x: 55, y: 16, radius: 6, found: false },
@@ -164,7 +448,7 @@ function App() {
       { id: 5, name: '노란색 별 장난감', x: 38, y: 72, radius: 8, found: false }
     ]
 
-    // If 'easy', we randomly disable 2 diffs (keep 3)
+    // Difficulty filter
     if (spotDifficulty === 'easy') {
       const indicesToKeep = []
       while (indicesToKeep.length < 3) {
@@ -189,16 +473,15 @@ function App() {
     setShakeBoard(false)
     setShowAnswer(false)
     setSpotSecondsElapsed(0)
+    audioHelper.stopBgm()
   }, [spotDifficulty, timeLimit])
 
-  // Setup/Reset game on difficulty or timeLimit change
   useEffect(() => {
     if (gameMode === 'spot') {
       initSpotGame()
     }
   }, [spotDifficulty, timeLimit, initSpotGame, gameMode])
 
-  // Spot Difference Timer Effect
   useEffect(() => {
     if (spotActive && !spotWon && !spotLost && gameMode === 'spot') {
       spotTimerRef.current = setInterval(() => {
@@ -207,6 +490,7 @@ function App() {
             setSpotLost(true)
             setSpotActive(false)
             setShowAnswer(true)
+            audioHelper.playWrong()
             return 0
           }
           return prev - 1
@@ -219,17 +503,15 @@ function App() {
     return () => clearInterval(spotTimerRef.current)
   }, [spotActive, spotWon, spotLost, gameMode])
 
-  // Handle click on either Original or Modified Image
   const handleSpotImageClick = (e) => {
     if (spotWon || spotLost) return
     
-    // Start game on first click
     if (!spotActive) {
       setSpotActive(true)
+      audioHelper.startBgm() // 시작 시 BGM 구동
     }
 
     const rect = e.currentTarget.getBoundingClientRect()
-    // Calculate click coordinates in percentage relative to the image size
     const clickX = ((e.clientX - rect.left) / rect.width) * 100
     const clickY = ((e.clientY - rect.top) / rect.height) * 100
 
@@ -245,48 +527,44 @@ function App() {
 
     if (foundAny) {
       setSpotDiffs(updatedDiffs)
-      // Check win condition
+      audioHelper.playCorrect() // 정답 효과음
+
       const allFound = updatedDiffs.every((diff) => diff.found)
       if (allFound) {
         setSpotWon(true)
         setSpotActive(false)
+        audioHelper.playVictory() // 승리 팬파레
       }
     } else {
-      // Wrong click
       setSpotWrongClicksCount((prev) => prev + 1)
       setShakeBoard(true)
       setTimeout(() => setShakeBoard(false), 250)
+      audioHelper.playWrong() // 오답 효과음
 
-      // Add a temporary X mark
       const newMark = { id: Date.now(), x: clickX, y: clickY }
       setSpotWrongMarks((prev) => [...prev, newMark])
-      // Remove mark after 1 second
       setTimeout(() => {
         setSpotWrongMarks((prev) => prev.filter((m) => m.id !== newMark.id))
       }, 1000)
     }
   }
 
-  // Use 1 hint
   const triggerHint = () => {
     if (hintsLeft <= 0 || spotWon || spotLost) return
-    if (!spotActive) setSpotActive(true)
+    if (!spotActive) {
+      setSpotActive(true)
+      audioHelper.startBgm()
+    }
 
-    // Find first unfound difference
     const unfoundIdx = spotDiffs.findIndex((diff) => !diff.found)
     if (unfoundIdx !== -1) {
       setHintsLeft((prev) => prev - 1)
       setHintHighlight(unfoundIdx)
+      audioHelper.playHint() // 힌트 효과음
       setTimeout(() => {
         setHintHighlight(null)
       }, 2000)
     }
-  }
-
-  const formatTime = (secs) => {
-    const mins = Math.floor(secs / 60)
-    const remainingSecs = secs % 60
-    return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`
   }
 
   const getRequiredDiffsCount = () => {
@@ -300,20 +578,20 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-between p-4 md:p-8 font-sans selection:bg-teal-500 selection:text-slate-900">
       
-      {/* Header & Mode Switcher */}
-      <header className="w-full max-w-5xl text-center my-4 space-y-4">
+      {/* Header & Game Switcher */}
+      <header className="w-full max-w-5xl text-center my-2 space-y-3">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-sm font-semibold tracking-wider uppercase mb-1 animate-pulse">
-          <Sparkles className="w-4 h-4" /> Multi-Game Hub
+          <Sparkles className="w-4 h-4" /> Kid-Friendly Game Platform
         </div>
-        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-indigo-500 bg-clip-text text-transparent">
-          나만의 로봇 & 캐릭터 게임 월드
+        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-indigo-500 bg-clip-text text-transparent">
+          틀린그림찾기 & 슬라이딩 퍼즐
         </h1>
         
         {/* Navigation Tabs */}
-        <div className="inline-flex p-1 bg-slate-900 border border-slate-800 rounded-xl shadow-lg mt-4">
+        <div className="inline-flex p-1 bg-slate-900 border border-slate-800 rounded-xl shadow-lg mt-2">
           <button
             onClick={() => setGameMode('spot')}
-            className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
+            className={`px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
               gameMode === 'spot'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -323,7 +601,7 @@ function App() {
           </button>
           <button
             onClick={() => setGameMode('sliding')}
-            className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
+            className={`px-5 py-2 rounded-lg font-bold text-sm transition-all duration-200 flex items-center gap-2 ${
               gameMode === 'sliding'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -342,13 +620,13 @@ function App() {
           <div className="space-y-6">
             
             {/* Spot Dashboard Panel */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
               
-              {/* Diff Controls Panel */}
-              <div className="md:col-span-4 bg-slate-900/50 backdrop-blur-md border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl space-y-4">
-                <div>
-                  <h2 className="text-lg font-bold flex items-center gap-2 text-teal-400 mb-3">
-                    <Award className="w-5 h-5" /> 난이도 & 시간 설정
+              {/* Left Panel (Control Panel) */}
+              <div className="lg:col-span-4 bg-slate-900/50 backdrop-blur-md border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl space-y-4">
+                <div className="space-y-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2 text-teal-400 border-b border-slate-800 pb-2">
+                    <Award className="w-5 h-5" /> 게임 옵션
                   </h2>
                   
                   {/* Difficulty Button group */}
@@ -376,7 +654,7 @@ function App() {
                   </div>
 
                   {/* Timer selection */}
-                  <div className="space-y-2 mt-4">
+                  <div className="space-y-2">
                     <label className="text-xs text-slate-400 block font-semibold">제한 시간</label>
                     <div className="grid grid-cols-3 gap-2">
                       {[30, 60, 90].map((secs) => (
@@ -394,33 +672,84 @@ function App() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Sound Panel */}
+                  <div className="space-y-3 pt-2 border-t border-slate-800/80">
+                    <label className="text-xs text-slate-400 block font-semibold">사운드 설정</label>
+                    
+                    {/* BGM Mute and Volume */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <button 
+                          onClick={() => setBgmMuted(!bgmMuted)} 
+                          className="flex items-center gap-1 text-slate-300 hover:text-white"
+                        >
+                          {bgmMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Music className="w-3.5 h-3.5 text-teal-400" />}
+                          배경음악 {bgmMuted ? '끔' : '켬'}
+                        </button>
+                        <span className="text-slate-500 text-[10px]">{Math.round(bgmVol * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05"
+                        value={bgmVol}
+                        onChange={(e) => setBgmVol(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                      />
+                    </div>
+
+                    {/* SFX Mute and Volume */}
+                    <div className="space-y-1 mt-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <button 
+                          onClick={() => setSfxMuted(!sfxMuted)} 
+                          className="flex items-center gap-1 text-slate-300 hover:text-white"
+                        >
+                          {sfxMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-indigo-400" />}
+                          효과음 {sfxMuted ? '끔' : '켬'}
+                        </button>
+                        <span className="text-slate-500 text-[10px]">{Math.round(sfxVol * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05"
+                        value={sfxVol}
+                        onChange={(e) => setSfxVol(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Score Summary */}
-                <div className="pt-4 border-t border-slate-800 space-y-3">
-                  <div className="flex justify-between items-center text-sm">
+                {/* Score Status */}
+                <div className="pt-3 border-t border-slate-800 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-400">찾은 개수:</span>
-                    <span className="font-bold text-teal-400">{getFoundDiffsCount()} / {getRequiredDiffsCount()}</span>
+                    <span className="font-bold text-teal-400 text-sm">{getFoundDiffsCount()} / {getRequiredDiffsCount()}</span>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-400">남은 힌트:</span>
-                    <span className="font-bold text-indigo-400">{hintsLeft} / 3회</span>
+                    <span className="font-bold text-indigo-400 text-sm">{hintsLeft} / 3회</span>
                   </div>
-                  <div className="flex justify-between items-center text-sm">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-400">오답 횟수:</span>
-                    <span className="font-bold text-rose-500">{spotWrongClicksCount}회</span>
+                    <span className="font-bold text-rose-500 text-sm">{spotWrongClicksCount}회</span>
                   </div>
                 </div>
               </div>
 
-              {/* Stats & Actions */}
-              <div className="md:col-span-8 bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-lg">
+              {/* Right Stats & Action Panel */}
+              <div className="lg:col-span-8 bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-lg">
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2">
                     <Timer className={`w-5 h-5 ${spotTimeLeft <= 10 ? 'text-rose-500 animate-bounce' : 'text-indigo-400'}`} />
                     <div>
                       <div className="text-xs text-slate-500">남은 시간</div>
-                      <div className={`font-mono font-bold text-xl ${spotTimeLeft <= 10 ? 'text-rose-400' : 'text-slate-200'}`}>
+                      <div className={`font-mono font-bold text-2xl ${spotTimeLeft <= 10 ? 'text-rose-400' : 'text-slate-200'}`}>
                         {spotTimeLeft}초
                       </div>
                     </div>
@@ -432,7 +761,7 @@ function App() {
                     <Activity className="w-5 h-5 text-emerald-400" />
                     <div>
                       <div className="text-xs text-slate-500">진행률</div>
-                      <div className="font-mono font-bold text-xl text-slate-200">
+                      <div className="font-mono font-bold text-2xl text-slate-200">
                         {Math.round((getFoundDiffsCount() / getRequiredDiffsCount()) * 100)}%
                       </div>
                     </div>
@@ -440,10 +769,16 @@ function App() {
                 </div>
 
                 <div className="flex gap-2">
+                  {/* Start Music Notice */}
+                  {!spotActive && (
+                    <div className="text-[10px] text-teal-400/80 mr-2 flex items-center animate-pulse">
+                      ◀ 첫 클릭 시 연주곡 BGM이 시작됩니다!
+                    </div>
+                  )}
                   <button
                     onClick={triggerHint}
                     disabled={hintsLeft <= 0 || spotWon || spotLost}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/90 text-slate-200 text-sm font-semibold border border-slate-750 disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-95 transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-750 disabled:opacity-50 disabled:cursor-not-allowed select-none active:scale-95 transition-all"
                   >
                     <HelpCircle className="w-4 h-4 text-indigo-400" /> 힌트 사용 ({hintsLeft})
                   </button>
@@ -457,17 +792,17 @@ function App() {
               </div>
             </div>
 
-            {/* Side-by-Side Images Area */}
+            {/* Pictures Play Board Area with custom pencil cursor */}
             <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 justify-center ${shakeBoard ? 'animate-shake' : ''}`}>
               
-              {/* Original Image Container */}
+              {/* Original Picture Column */}
               <div className="space-y-2">
                 <div className="text-center font-bold text-sm text-slate-400 tracking-wide uppercase bg-slate-900/40 py-1.5 rounded-lg border border-slate-900">
-                  원본 이미지
+                  원본 그림
                 </div>
                 <div 
                   onClick={handleSpotImageClick}
-                  className="relative cursor-crosshair overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square"
+                  className="relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area"
                 >
                   <img 
                     src={originalImg} 
@@ -475,46 +810,55 @@ function App() {
                     className="w-full h-full object-cover select-none pointer-events-none"
                   />
                   
-                  {/* Found Differences Circles */}
-                  {spotDiffs.map((diff, idx) => {
-                    if (diff.found || showAnswer) {
-                      return (
-                        <div
-                          key={`orig-${diff.id}`}
-                          className="absolute border-4 border-emerald-500 rounded-full shadow-[0_0_10px_#10b981] animate-pop-in pointer-events-none"
-                          style={{
-                            left: `${diff.x}%`,
-                            top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        />
-                      )
-                    }
-                    if (hintHighlight === idx) {
-                      return (
-                        <div
-                          key={`hint-orig-${diff.id}`}
-                          className="absolute border-4 border-teal-400 rounded-full animate-ping-glow pointer-events-none"
-                          style={{
-                            left: `${diff.x}%`,
-                            top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        />
-                      )
-                    }
-                    return null
-                  })}
+                  {/* SVG Hand-drawn Sketch Circle Overlay */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                    {spotDiffs.map((diff, idx) => {
+                      if (diff.found || showAnswer) {
+                        return (
+                          <circle
+                            key={`orig-circle-${diff.id}`}
+                            cx={`${diff.x}%`}
+                            cy={`${diff.y}%`}
+                            r={`${diff.radius * 1.1}%`}
+                            fill="none"
+                            stroke="#06b6d4"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            className="sketch-circle"
+                            style={{
+                              transformOrigin: `${diff.x}% ${diff.y}%`,
+                              filter: 'drop-shadow(0 0 3px rgba(6,182,212,0.4))'
+                            }}
+                          />
+                        )
+                      }
+                      if (hintHighlight === idx) {
+                        return (
+                          <circle
+                            key={`orig-hint-${diff.id}`}
+                            cx={`${diff.x}%`}
+                            cy={`${diff.y}%`}
+                            r={`${diff.radius * 1.1}%`}
+                            fill="none"
+                            stroke="#14b8a6"
+                            strokeWidth="3.5"
+                            className="animate-pulse"
+                            style={{
+                              transformOrigin: `${diff.x}% ${diff.y}%`,
+                              filter: 'drop-shadow(0 0 6px #14b8a6)'
+                            }}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                  </svg>
 
-                  {/* Temporary Wrong Click Marks */}
+                  {/* Red Sketch X marks for wrong clicks */}
                   {spotWrongMarks.map((mark) => (
                     <div
                       key={`orig-wrong-${mark.id}`}
-                      className="absolute text-rose-500 font-extrabold text-3xl font-mono animate-fade-out-slow pointer-events-none select-none"
+                      className="absolute sketch-x font-bold text-4xl pointer-events-none select-none"
                       style={{
                         left: `${mark.x}%`,
                         top: `${mark.y}%`,
@@ -527,14 +871,14 @@ function App() {
                 </div>
               </div>
 
-              {/* Modified Image Container */}
+              {/* Modified Picture Column */}
               <div className="space-y-2">
                 <div className="text-center font-bold text-sm text-slate-400 tracking-wide uppercase bg-slate-900/40 py-1.5 rounded-lg border border-slate-900">
-                  수정된 이미지
+                  틀린 그림
                 </div>
                 <div 
                   onClick={handleSpotImageClick}
-                  className="relative cursor-crosshair overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square"
+                  className="relative overflow-hidden rounded-2xl border-4 border-slate-900 shadow-2xl aspect-square pencil-cursor-area"
                 >
                   <img 
                     src={modifiedImg} 
@@ -542,46 +886,55 @@ function App() {
                     className="w-full h-full object-cover select-none pointer-events-none"
                   />
 
-                  {/* Found Differences Circles */}
-                  {spotDiffs.map((diff, idx) => {
-                    if (diff.found || showAnswer) {
-                      return (
-                        <div
-                          key={`mod-${diff.id}`}
-                          className="absolute border-4 border-emerald-500 rounded-full shadow-[0_0_10px_#10b981] animate-pop-in pointer-events-none"
-                          style={{
-                            left: `${diff.x}%`,
-                            top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        />
-                      )
-                    }
-                    if (hintHighlight === idx) {
-                      return (
-                        <div
-                          key={`hint-mod-${diff.id}`}
-                          className="absolute border-4 border-teal-400 rounded-full animate-ping-glow pointer-events-none"
-                          style={{
-                            left: `${diff.x}%`,
-                            top: `${diff.y}%`,
-                            width: `${diff.radius * 2.2}%`,
-                            height: `${diff.radius * 2.2}%`,
-                            transform: 'translate(-50%, -50%)'
-                          }}
-                        />
-                      )
-                    }
-                    return null
-                  })}
+                  {/* SVG Hand-drawn Sketch Circle Overlay */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                    {spotDiffs.map((diff, idx) => {
+                      if (diff.found || showAnswer) {
+                        return (
+                          <circle
+                            key={`mod-circle-${diff.id}`}
+                            cx={`${diff.x}%`}
+                            cy={`${diff.y}%`}
+                            r={`${diff.radius * 1.1}%`}
+                            fill="none"
+                            stroke="#06b6d4"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            className="sketch-circle"
+                            style={{
+                              transformOrigin: `${diff.x}% ${diff.y}%`,
+                              filter: 'drop-shadow(0 0 3px rgba(6,182,212,0.4))'
+                            }}
+                          />
+                        )
+                      }
+                      if (hintHighlight === idx) {
+                        return (
+                          <circle
+                            key={`mod-hint-${diff.id}`}
+                            cx={`${diff.x}%`}
+                            cy={`${diff.y}%`}
+                            r={`${diff.radius * 1.1}%`}
+                            fill="none"
+                            stroke="#14b8a6"
+                            strokeWidth="3.5"
+                            className="animate-pulse"
+                            style={{
+                              transformOrigin: `${diff.x}% ${diff.y}%`,
+                              filter: 'drop-shadow(0 0 6px #14b8a6)'
+                            }}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                  </svg>
 
-                  {/* Temporary Wrong Click Marks */}
+                  {/* Red Sketch X marks for wrong clicks */}
                   {spotWrongMarks.map((mark) => (
                     <div
                       key={`mod-wrong-${mark.id}`}
-                      className="absolute text-rose-500 font-extrabold text-3xl font-mono animate-fade-out-slow pointer-events-none select-none"
+                      className="absolute sketch-x font-bold text-4xl pointer-events-none select-none"
                       style={{
                         left: `${mark.x}%`,
                         top: `${mark.y}%`,
@@ -596,9 +949,9 @@ function App() {
 
             </div>
 
-            {/* Victory / Defeat Dialog */}
+            {/* Game Result Modals */}
             {(spotWon || spotLost) && (
-              <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl max-w-md w-full text-center shadow-2xl relative overflow-hidden">
                   
                   {spotWon ? (
@@ -606,12 +959,12 @@ function App() {
                       <div className="mx-auto w-16 h-16 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 flex items-center justify-center mb-4 animate-bounce">
                         <Trophy className="w-8 h-8" />
                       </div>
-                      <h3 className="text-3xl font-extrabold bg-gradient-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent">
-                        성공! 모두 찾았습니다
+                      <h3 className="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent">
+                        축하합니다! 모두 찾았습니다
                       </h3>
                       <div className="text-slate-300 my-5 space-y-2 text-sm">
-                        <p>🎉 축하합니다! 모든 틀린 부분을 찾았습니다.</p>
-                        <div className="bg-slate-950/50 p-4 rounded-xl space-y-1 font-mono text-slate-400 border border-slate-800">
+                        <p>🎉 모든 틀린 부분을 성공적으로 찾았습니다.</p>
+                        <div className="bg-slate-950/50 p-4 rounded-xl space-y-1.5 font-mono text-slate-400 border border-slate-850">
                           <div className="flex justify-between"><span>걸린 시간:</span> <span className="text-slate-200 font-bold">{spotSecondsElapsed}초</span></div>
                           <div className="flex justify-between"><span>오답 횟수:</span> <span className="text-slate-200 font-bold">{spotWrongClicksCount}회</span></div>
                         </div>
@@ -622,19 +975,19 @@ function App() {
                       <div className="mx-auto w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mb-4 animate-pulse">
                         <AlertTriangle className="w-8 h-8" />
                       </div>
-                      <h3 className="text-3xl font-extrabold text-rose-400">
-                        시간 초과!
+                      <h3 className="text-2xl md:text-3xl font-bold text-rose-400">
+                        타임 오버!
                       </h3>
                       <p className="text-slate-400 my-5 text-sm">
-                        아쉽게도 제한 시간이 지났습니다. 정답 위치를 공개합니다!
+                        제한 시간이 종료되었습니다. 정답 구역을 보여드릴게요!
                       </p>
                     </>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3 mt-6">
+                  <div className="grid grid-cols-3 gap-2 mt-6">
                     <button
                       onClick={initSpotGame}
-                      className="py-3 px-4 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all text-sm"
+                      className="py-2.5 px-1 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all text-xs"
                     >
                       다시 도전하기
                     </button>
@@ -644,9 +997,19 @@ function App() {
                         setSpotLost(false);
                         setShowAnswer(true);
                       }}
-                      className="py-3 px-4 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition-all text-sm"
+                      className="py-2.5 px-1 rounded-xl font-bold bg-indigo-650 hover:bg-indigo-600 text-white transition-all text-xs"
                     >
                       정답 확인하기
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSpotWon(false);
+                        setSpotLost(false);
+                        // Open game menu / change difficulty
+                      }}
+                      className="py-2.5 px-1 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:shadow-lg hover:shadow-teal-500/20 active:scale-95 transition-all text-xs"
+                    >
+                      난이도 변경하기
                     </button>
                   </div>
                 </div>
@@ -657,7 +1020,7 @@ function App() {
 
         {/* ================= SLIDING PUZZLE GAME ================= */}
         {gameMode === 'sliding' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start my-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start my-auto animate-fade-in">
             
             {/* Left Panel: Settings & Upload */}
             <section className="lg:col-span-4 space-y-6">
