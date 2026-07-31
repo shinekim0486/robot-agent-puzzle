@@ -100,33 +100,26 @@ function App() {
     const size = gridSize
     const totalTiles = size * size
     const emptyIndex = tiles.indexOf(totalTiles - 1)
-
     const clickRow = Math.floor(index / size)
     const clickCol = index % size
     const emptyRow = Math.floor(emptyIndex / size)
     const emptyCol = emptyIndex % size
-
-    // Check if clicked tile is adjacent to empty tile
     const isAdjacent = Math.abs(clickRow - emptyRow) + Math.abs(clickCol - emptyCol) === 1
 
-    if (isAdjacent) {
-      // Start timer on first move
-      if (moves === 0) {
-        setIsActive(true)
-      }
+    if (!isAdjacent) return
 
-      const newTiles = [...tiles]
-      // Swap clicked tile with empty tile
-      newTiles[emptyIndex] = tiles[index]
-      newTiles[index] = totalTiles - 1
-      
-      setTiles(newTiles)
-      setMoves((prev) => prev + 1)
+    if (moves === 0) setIsActive(true)
 
-      if (checkWin(newTiles)) {
-        setIsWon(true)
-        setIsActive(false)
-      }
+    const newTiles = [...tiles]
+    newTiles[emptyIndex] = tiles[index]
+    newTiles[index] = totalTiles - 1
+
+    setTiles(newTiles)
+    setMoves((prev) => prev + 1)
+
+    if (checkWin(newTiles)) {
+      setIsWon(true)
+      setIsActive(false)
     }
   }
 
@@ -229,6 +222,10 @@ function App() {
 
         {/* Center Panel: Puzzle Board */}
         <section className="lg:col-span-8 flex flex-col items-center space-y-6">
+          <div className="w-full max-w-lg rounded-xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-center text-sm text-teal-100">
+            <strong className="text-teal-300">게임 방법:</strong> 점선으로 표시된 빈 칸 옆의
+            빛나는 타일을 클릭하세요.
+          </div>
           
           {/* Stats Bar */}
           <div className="w-full max-w-lg bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-2xl px-6 py-4 flex items-center justify-between shadow-lg">
@@ -276,9 +273,23 @@ function App() {
               {tiles.map((tileValue, index) => {
                 const totalTiles = gridSize * gridSize
                 const isEmpty = tileValue === totalTiles - 1
+                const emptyIndex = tiles.indexOf(totalTiles - 1)
+                const tileRow = Math.floor(index / gridSize)
+                const tileCol = index % gridSize
+                const emptyRow = Math.floor(emptyIndex / gridSize)
+                const emptyCol = emptyIndex % gridSize
+                const isMovable = Math.abs(tileRow - emptyRow) + Math.abs(tileCol - emptyCol) === 1
 
                 if (isEmpty) {
-                  return <div key="empty" className="bg-slate-950/80 rounded-lg border border-slate-900/50" />
+                  return (
+                    <div
+                      key="empty"
+                      aria-label="빈 칸"
+                      className="flex items-center justify-center rounded-lg border-2 border-dashed border-teal-400/70 bg-teal-500/10 text-xs font-bold text-teal-300/80 shadow-inner"
+                    >
+                      빈 칸
+                    </div>
+                  )
                 }
 
                 // Calculate background position for slicing
@@ -292,7 +303,13 @@ function App() {
                   <button
                     key={tileValue}
                     onClick={() => handleTileClick(index)}
-                    className="w-full h-full rounded-lg overflow-hidden border border-slate-950/20 shadow-md hover:scale-[0.99] active:scale-[0.97] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-500/50 cursor-pointer"
+                    aria-label={isMovable ? `이동 가능한 퍼즐 조각 ${tileValue + 1}` : `퍼즐 조각 ${tileValue + 1}`}
+                    title={isMovable ? '클릭해서 빈 칸으로 이동' : '빈 칸 옆 타일만 이동할 수 있습니다'}
+                    className={`w-full h-full rounded-lg overflow-hidden border shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-teal-500/50 ${
+                      isMovable
+                        ? 'cursor-pointer border-teal-300 ring-2 ring-teal-400/70 hover:scale-[0.98] active:scale-95'
+                        : 'cursor-not-allowed border-slate-950/20 opacity-90'
+                    }`}
                     style={{
                       backgroundImage: `url(${imageUrl})`,
                       backgroundSize: `${gridSize * 100}% ${gridSize * 100}%`,
