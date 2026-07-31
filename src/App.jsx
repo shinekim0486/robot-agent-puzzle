@@ -629,7 +629,7 @@ function App() {
           <Sparkles className="w-4 h-4" /> Kid-Friendly Game Platform
         </div>
         <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 via-emerald-400 to-indigo-500 bg-clip-text text-transparent">
-          틀린그림찾기 & 슬라이딩 퍼즐
+          틀린그림찾기 & 인인퍼즐
         </h1>
         
         {/* Navigation Tabs */}
@@ -652,7 +652,7 @@ function App() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Grid className="w-4 h-4" /> 슬라이딩 퍼즐
+            <Grid className="w-4 h-4" /> 인인퍼즐
           </button>
         </div>
       </header>
